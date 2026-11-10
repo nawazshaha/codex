@@ -1,0 +1,161 @@
+/**
+ * Module 06, Sprint 1: placement discovery and UX contract.
+ *
+ * This file captures the agreed discovery baseline before connecting to the
+ * recommendation API. Keep search retrieval separate: the search-empty rail
+ * is shown only after the catalogue search itself has completed with no hits.
+ */
+
+export type RecommendationPlacement =
+  | "home"
+  | "product_detail"
+  | "category"
+  | "search_empty"
+  | "cart";
+
+export type FallbackBehavior =
+  | "hide_section"
+  | "show_catalogue_popular"
+  | "show_category_popular"
+  | "show_related_products"
+  | "keep_cart_unchanged";
+
+export interface PlacementDefinition {
+  /** User-facing location where the recommendation rail belongs. */
+  label: string;
+  /** Context fields the page can provide when requesting recommendations. */
+  requiredContext: readonly string[];
+  /** Fallback when the API returns no items. */
+  emptyFallback: FallbackBehavior;
+  /** Fallback on timeout or request error. */
+  errorFallback: FallbackBehavior;
+  /** UX constraints to carry into design and implementation stories. */
+  uxNotes: readonly string[];
+}
+
+export const recommendationPlacements: Record<
+  RecommendationPlacement,
+  PlacementDefinition
+> = {
+  home: {
+    label: "Recommended for you",
+    requiredContext: ["sessionId or userId (when available)"],
+    emptyFallback: "show_catalogue_popular",
+    errorFallback: "hide_section",
+    uxNotes: [
+      "The rest of the home page remains usable while recommendations load.",
+      "Guest visitors receive non-personalized results until eligible signals exist.",
+    ],
+  },
+  product_detail: {
+    label: "Related products",
+    requiredContext: ["productId"],
+    emptyFallback: "show_related_products",
+    errorFallback: "hide_section",
+    uxNotes: [
+      "Do not render the rail if the current product is missing or unavailable.",
+      "Keep product details and purchase controls independent of this request.",
+    ],
+  },
+  category: {
+    label: "Popular in this category",
+    requiredContext: ["categoryId"],
+    emptyFallback: "show_category_popular",
+    errorFallback: "hide_section",
+    uxNotes: [
+      "Recommendation results must not replace catalogue filters or pagination.",
+      "Keep category and availability constraints in effect.",
+    ],
+  },
+  search_empty: {
+    label: "Explore these instead",
+    requiredContext: ["searchQuery", "searchCompleted", "searchResultCount"],
+    emptyFallback: "hide_section",
+    errorFallback: "hide_section",
+    uxNotes: [
+      "Render only when searchCompleted is true and searchResultCount is zero.",
+      "Keep the query visible and provide a clear way to edit or clear it.",
+      "Recommendations supplement discovery and never alter search results.",
+    ],
+  },
+  cart: {
+    label: "You may also like",
+    requiredContext: ["cartProductIds"],
+    emptyFallback: "hide_section",
+    errorFallback: "keep_cart_unchanged",
+    uxNotes: [
+      "Recommendation failures must not change cart contents or block cart actions.",
+      "Exclude products already in the cart when the shared contract supports it.",
+    ],
+  },
+};
+
+export interface SearchEmptyState {
+  completed: boolean;
+  resultCount: number;
+}
+
+/** Gate the search-empty placement without coupling it to search retrieval. */
+export function shouldShowSearchEmptyRecommendations(
+  search: SearchEmptyState,
+): boolean {
+  return search.completed && search.resultCount === 0;
+}
+
+/**
+ * Sprint 1 user stories for review and refinement.
+ * These remain discovery artifacts; the provisional API schema lives in
+ * ../sprint_2/api-contract.ts.
+ */
+export const sprintOneStories = [
+  {
+    id: "M06-S1-01",
+    asA: "shopper",
+    want: "relevant recommendations on the home page",
+    soThat: "I can discover products without interrupting browsing",
+    acceptance: [
+      "The placement has a loading, populated, empty, and error state.",
+      "A recommendation timeout does not block the home page.",
+    ],
+  },
+  {
+    id: "M06-S1-02",
+    asA: "shopper viewing a product",
+    want: "related products based on the current product",
+    soThat: "I can compare or discover similar items",
+    acceptance: [
+      "The current product identifier is available as placement context.",
+      "Missing product context hides the rail without affecting product details.",
+    ],
+  },
+  {
+    id: "M06-S1-03",
+    asA: "shopper browsing a category",
+    want: "category-aware recommendations",
+    soThat: "I can discover items within the category I chose",
+    acceptance: [
+      "The category context is preserved.",
+      "Catalogue filters and pagination remain independent.",
+    ],
+  },
+  {
+    id: "M06-S1-04",
+    asA: "shopper with no search matches",
+    want: "alternative products and a way to revise my search",
+    soThat: "I can recover from an empty result page",
+    acceptance: [
+      "The placement appears only after a completed search with zero results.",
+      "The query remains available and can be edited or cleared.",
+    ],
+  },
+  {
+    id: "M06-S1-05",
+    asA: "shopper viewing my cart",
+    want: "optional complementary recommendations",
+    soThat: "I can discover useful products while managing my cart",
+    acceptance: [
+      "A recommendation timeout does not block cart actions.",
+      "Cart contents remain unchanged when recommendations fail.",
+    ],
+  },
+] as const;
